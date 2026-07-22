@@ -55,7 +55,9 @@ services:
       - "5173:5173"
     environment:
       # Point the browser at the locally running backend container.
-      - VITE_API_PATH=http://localhost:5000/
+      # No trailing slash: some components concatenate `VITE_API_PATH + '/api/...'`,
+      # and a trailing slash there produces a broken `//api/...` URL.
+      - VITE_API_PATH=http://localhost:5000
     volumes:
       - ./frontend/src:/app/src
     env_file:
