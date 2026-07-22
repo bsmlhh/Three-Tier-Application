@@ -8,12 +8,14 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies. Retry/timeout settings make the build resilient to
-# flaky networks (the EPIPE/registry errors seen on slow connections).
+# flaky networks (the EPIPE/ECONNRESET registry errors seen on slow connections).
+# maxsockets 3 throttles concurrent TLS connections so an unstable link doesn't reset them.
 RUN npm config set fetch-retries 5 \
     && npm config set fetch-retry-factor 2 \
     && npm config set fetch-retry-mintimeout 20000 \
     && npm config set fetch-retry-maxtimeout 120000 \
     && npm config set fetch-timeout 600000 \
+    && npm config set maxsockets 3 \
     && npm ci --no-audit --no-fund
 
 # Copy the rest of the application code to the working directory
