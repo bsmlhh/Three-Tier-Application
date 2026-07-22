@@ -62,10 +62,12 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # Point the browser at the locally running backend container.
+      # The browser (which may be remote, e.g. via Tailscale) must reach the
+      # backend at the HOST's address, not "localhost" — localhost in the
+      # browser is the client machine, not the Docker host.
       # No trailing slash: some components concatenate `VITE_API_PATH + '/api/...'`,
       # and a trailing slash there produces a broken `//api/...` URL.
-      - VITE_API_PATH=http://localhost:5000
+      - VITE_API_PATH=http://100.79.76.79:5000
     volumes:
       - ./frontend/src:/app/src
     env_file:
