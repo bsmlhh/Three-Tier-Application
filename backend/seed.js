@@ -78,17 +78,23 @@ const POSTS = [
   },
 ];
 
-async function seed() {
-  await connectDB();
-  await connectToRedis();
+/**
+ * Insert the demo posts. Assumes Mongo (and optionally Redis) are already
+ * connected — safe to call from server startup or the CLI runner below.
+ * @param {{ force?: boolean }} [opts] force=true re-seeds even if posts exist.
+ * @returns {Promise<number>} number of posts inserted (0 if skipped).
+ */
+export async function seedDatabase({ force = false } = {}) {
+  const existing = await Post.estimatedDocumentCount();
+  if (existing > 0 && !force) {
+    return 0;
+  }
 
   // Find or create the seed author.
   let author = await User.findOne({ email: SEED_USER.email });
   if (!author) {
     author = await User.create(SEED_USER);
     console.log(`Created seed user: ${author.email}`);
-  } else {
-    console.log(`Seed user already exists: ${author.email}`);
   }
 
   // Idempotent: clear this author's previous seed posts before re-inserting.
@@ -119,12 +125,24 @@ async function seed() {
   console.log(
     `Seeded ${inserted.length} posts (${inserted.filter((d) => d.isFeaturedPost).length} featured).`
   );
-  await mongoose.connection.close();
-  process.exit(0);
+  return inserted.length;
 }
 
-seed().catch(async (err) => {
-  console.error('Seeding failed:', err.message);
-  await mongoose.connection.close().catch(() => {});
-  process.exit(1);
-});
+// CLI entrypoint: `npm run seed`. Connects, force-seeds, then exits.
+// Detects direct execution so importing this module does NOT run it.
+const isDirectRun = process.argv[1] && process.argv[1].endsWith('seed.js');
+if (isDirectRun) {
+  (async () => {
+    try {
+      await connectDB();
+      await connectToRedis();
+      await seedDatabase({ force: true });
+      await mongoose.connection.close();
+      process.exit(0);
+    } catch (err) {
+      console.error('Seeding failed:', err.message);
+      await mongoose.connection.close().catch(() => {});
+      process.exit(1);
+    }
+  })();
+}
