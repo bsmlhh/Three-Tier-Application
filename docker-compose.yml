@@ -1,17 +1,41 @@
-version: "3.8"
 services:
   mongodb:
     container_name: mongo
     image: mongo:latest
+    ports:
+      - "27017:27017"
     volumes:
-      - ./backend/data:/data
-    
-    
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     container_name: backend
     build: ./backend
     env_file:
       - ./backend/.env.sample
+    environment:
+      # Override values from .env.sample so the backend reaches the
+      # DB/cache containers by their service name instead of 127.0.0.1,
+      # and listens on the port compose actually publishes.
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongodb:27017/wanderlust
+      - REDIS_URL=redis://redis:6379
     ports:
       - "5000:5000"
     volumes:
@@ -19,13 +43,19 @@ services:
       - ./backend:/app
       - /app/node_modules
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
     container_name: frontend
     build: ./frontend
     ports:
       - "5173:5173"
+    environment:
+      # Point the browser at the locally running backend container.
+      - VITE_API_PATH=http://localhost:5000/
     volumes:
       - ./frontend/src:/app/src
     env_file:
@@ -37,3 +67,4 @@ services:
 
 volumes:
   logs:
+  mongo-data:

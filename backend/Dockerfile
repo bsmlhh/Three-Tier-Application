@@ -17,4 +17,4 @@ COPY .env.sample .env
 EXPOSE 5000
 
 # Command to start the backend server
-CMD ["npm", "start"]
+CMD ["npm", "run", "dev"]

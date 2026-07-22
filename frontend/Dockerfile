@@ -1,10 +1,10 @@
 FROM node:21
-WORKDIR /frontend
+WORKDIR /app
 COPY package*.json ./
 RUN npm i
 COPY . .
 COPY .env.sample .env.local
 
-EXPOSE 3000
+EXPOSE 5173
 
-CMD ["npm","run","dev", "--","--host"]
+CMD ["npm","run","dev", "--","--host","--port","5173"]
