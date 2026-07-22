@@ -1,7 +1,10 @@
 services:
   mongodb:
     container_name: mongo
-    image: mongo:latest
+    image: mongo:7.0
+    # Apple Silicon (M1/M2): run the native arm64 build. The amd64 image under
+    # emulation lacks AVX, which MongoDB 5.0+ requires, so it exits immediately.
+    platform: linux/arm64
     networks:
       - app-net
     ports:
