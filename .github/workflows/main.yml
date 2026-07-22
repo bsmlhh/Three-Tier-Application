@@ -1,0 +1,25 @@
+#ci
+name: three-tier-app-CI
+
+on:
+  push:
+    branches: [ "main"]
+jobs:
+  ci:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: build image
+        run: docker compose build 
+        
+  cd:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: build image
+        run: docker compose up -d  
+    
+
+    
