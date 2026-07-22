@@ -34,14 +34,8 @@ services:
     networks:
       - app-net
     env_file:
+      # Single source of truth for backend config (PORT, Mongo/Redis URIs, CORS).
       - ./backend/.env.sample
-    environment:
-      # Override values from .env.sample so the backend reaches the
-      # DB/cache containers by their service name instead of 127.0.0.1,
-      # and listens on the port compose actually publishes.
-      - PORT=5000
-      - MONGODB_URI=mongodb://mongodb:27017/wanderlust
-      - REDIS_URL=redis://redis:6379
     ports:
       - "5000:5000"
     volumes:
@@ -61,16 +55,10 @@ services:
       - app-net
     ports:
       - "5173:5173"
-    environment:
-      # The browser (which may be remote, e.g. via Tailscale) must reach the
-      # backend at the HOST's address, not "localhost" — localhost in the
-      # browser is the client machine, not the Docker host.
-      # No trailing slash: some components concatenate `VITE_API_PATH + '/api/...'`,
-      # and a trailing slash there produces a broken `//api/...` URL.
-      - VITE_API_PATH=http://100.79.76.79:5000
     volumes:
       - ./frontend/src:/app/src
     env_file:
+      # Single source of truth for the frontend's API base URL.
       - ./frontend/.env.sample
     stdin_open: true
     tty: true
