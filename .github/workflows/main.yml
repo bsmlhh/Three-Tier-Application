@@ -1,26 +1,187 @@
-#ci
-name: three-tier-app-CI
+# name: three-tier-app-CI
+
+# on:
+#   push:
+#     branches: [ "main"]
+
+# jobs:
+#   CI:
+#     runs-on: self-hosted
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0 # Shallow clones disabled for better SonarQube analysis
+
+#       # -----------------------------------------------------------
+#       # SAST 1: Gitleaks Secret Scan
+#       # -----------------------------------------------------------
+#       - name: Gitleaks Secret Scan
+#         uses: gitleaks/gitleaks-action@v2
+      
+#       - name: Semgrep Code Scan
+#         run: |
+#           docker run --rm -v "${PWD}:/src" returntocorp/semgrep semgrep scan --config=auto
+#       # -----------------------------------------------------------
+#       # SAST 2: Secret & Dependency Vulnerability Scan (Trivy)
+#       # -----------------------------------------------------------
+#       - name: Trivy Code & Secret Scan
+#         uses: aquasecurity/trivy-action@master
+#         with:
+#           scan-type: 'fs'
+#           ignore-unfixed: true
+#           severity: 'CRITICAL,HIGH'
+
+#       # -----------------------------------------------------------
+#       # SAST 3: SonarQube Code Analysis (Backend)
+#       # -----------------------------------------------------------
+#       #- name: SonarQube Scan - Backend
+#         #uses: SonarSource/sonarqube-scan-action@v3
+#         #env:
+#           #SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#           #SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+#         #with:
+#           #projectBaseDir: ./backend
+
+#       # -----------------------------------------------------------
+#       # SAST 4: SonarQube Code Analysis (Frontend)
+#       # -----------------------------------------------------------
+#       # - name: SonarQube Scan - Frontend
+#       #   uses: SonarSource/sonarqube-scan-action@v3
+#       #   env:
+#       #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#       #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+#       #   with:
+#       #     projectBaseDir: ./frontend
+
+#       # -----------------------------------------------------------
+#       # BUILD DOCKER IMAGES LOCALLY
+#       # -----------------------------------------------------------
+#       - name: Build Docker Images locally
+#         run: |
+#           docker compose build
+#   ci:
+#     runs-on: self-hosted
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+#       - name: build image
+#         run: docker compose build 
+        
+#   cd:
+#     needs: ci
+#     runs-on: self-hosted
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+#       - name: build image
+#         run: docker compose up -d  
+
+
+name: three-tier-app-CI-CD
 
 on:
   push:
-    branches: [ "main"]
+    branches: [ "main" ]
+
 jobs:
+  # ==========================================
+  # 1. CONTINUOUS INTEGRATION & SAST SCANNING
+  # ==========================================
   ci:
     runs-on: self-hosted
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: build image
-        run: docker compose build 
-        
+        with:
+          fetch-depth: 0 # مطلوب لـ Gitleaks و SonarQube
+
+      # -----------------------------------------------------------
+      # إنشاء مجلد لتجميع كل التقارير فيه
+      # -----------------------------------------------------------
+      - name: Create Reports Directory
+        run: mkdir -p sast-reports
+
+      # -----------------------------------------------------------
+      # SAST 1: Gitleaks - Secret Scanning
+      # -----------------------------------------------------------
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+
+      # -----------------------------------------------------------
+      # SAST 2: Semgrep - Static Code Analysis (JSON Report)
+      # -----------------------------------------------------------
+      - name: Semgrep Code Scan
+        run: |
+          docker run --rm -v "${PWD}:/src" returntocorp/semgrep semgrep scan --config=auto --json -o /src/sast-reports/semgrep-report.json || true
+
+      # -----------------------------------------------------------
+      # SAST 3: Trivy - Code & Dependency Scan (HTML Report)
+      # -----------------------------------------------------------
+      - name: Trivy Code & Secret Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          format: 'template'
+          template: '@contrib/html.tpl'
+          output: 'sast-reports/trivy-report.html'
+
+      # -----------------------------------------------------------
+      # SAST 4: SonarQube Code Analysis (Backend)
+      # -----------------------------------------------------------
+      # - name: SonarQube Scan - Backend
+      #   uses: SonarSource/sonarqube-scan-action@v3
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   with:
+      #     projectBaseDir: ./backend
+
+      # # -----------------------------------------------------------
+      # # SAST 5: SonarQube Code Analysis (Frontend)
+      # # -----------------------------------------------------------
+      # - name: SonarQube Scan - Frontend
+      #   uses: SonarSource/sonarqube-scan-action@v3
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      #   with:
+      #     projectBaseDir: ./frontend
+
+      # -----------------------------------------------------------
+      # 📤 UPLOAD SAST REPORTS AS PIPELINE ARTIFACTS
+      # -----------------------------------------------------------
+      - name: Upload SAST Reports
+        uses: actions/upload-artifact@v4
+        if: always() # يضمن رفع التقارير حتى لو فيه خطوة من الفحص فشلت أو اكتشفت ثغرات
+        with:
+          name: sast-security-reports
+          path: sast-reports/
+          retention-days: 7 # مدة الاحتفاظ بالملفات على GitHub
+
+      # -----------------------------------------------------------
+      # BUILD DOCKER IMAGES
+      # -----------------------------------------------------------
+      - name: Build Docker Images locally
+        run: |
+          docker compose build
+
+  # ==========================================
+  # 2. CONTINUOUS DEPLOYMENT (CD)
+  # ==========================================
   cd:
     needs: ci
     runs-on: self-hosted
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: build image
-        run: docker compose up -d  
+
+      - name: Deploy via self-hosted
+        run: |
+          docker compose up -d --build --remove-orphans
+          docker image prune -f
     
 
     
